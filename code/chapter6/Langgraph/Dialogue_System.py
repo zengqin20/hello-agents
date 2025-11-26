@@ -59,7 +59,8 @@ def understand_query_node(state: SearchState) -> SearchState:
 理解：[用户需求总结]
 搜索词：[最佳搜索关键词]"""
 
-    response = llm.invoke([SystemMessage(content=understand_prompt)])
+    response = llm.invoke([SystemMessage(content="你是一个智能搜索助手，负责理解用户意图并提出搜索关键词。"),
+        HumanMessage(content=understand_prompt)])
     
     # 提取搜索关键词
     response_text = response.content
@@ -141,7 +142,8 @@ def generate_answer_node(state: SearchState) -> SearchState:
 
 请提供一个有用的回答，并说明这是基于已有知识的回答。"""
         
-        response = llm.invoke([SystemMessage(content=fallback_prompt)])
+        response = llm.invoke([ SystemMessage(content="你是一位知识丰富的助手。"),
+            HumanMessage(content=fallback_prompt)])
         
         return {
             "final_answer": response.content,
@@ -164,7 +166,10 @@ def generate_answer_node(state: SearchState) -> SearchState:
 4. 回答要结构清晰、易于理解
 5. 如果搜索结果不够完整，请说明并提供补充建议"""
 
-    response = llm.invoke([SystemMessage(content=answer_prompt)])
+    response = llm.invoke([
+        SystemMessage(content="你是一位知识整合助手，基于真实搜索结果回答问题。"),
+        HumanMessage(content=answer_prompt)
+    ])
     
     return {
         "final_answer": response.content,
@@ -221,6 +226,9 @@ async def main():
             continue
         
         session_count += 1
+        #thread_id 用来标识一次对话/会话的唯一线程 ID
+        #将本次运行归入一个会话线程 search-session-{session_count} ，便于区分不同轮次或不同用户的对话
+        #如果图配置了“检查点/记忆”存储（如 MemorySaver 、 SqliteSaver ）， thread_id 会作为键，用于加载/保存该会话的状态，实现跨请求续接与回放。
         config = {"configurable": {"thread_id": f"search-session-{session_count}"}}
         
         # 初始状态
@@ -236,11 +244,15 @@ async def main():
         try:
             print("\n" + "="*60)
             
-            # 执行工作流
+            # 执行工作流 一边运行工作流、一边实时打印每个节点产生的最新模型回复。
+            # 以流模式运行图，节点一完成就立刻产出一次 output，而不是等所有节点完成。
             async for output in app.astream(initial_state, config=config):
+                # 返回当前这一步所有完成节点的更新，键是 node_name ，值是该节点的状态切片 node_output。
                 for node_name, node_output in output.items():
                     if "messages" in node_output and node_output["messages"]:
+                        #取该节点最新的一条消息
                         latest_message = node_output["messages"][-1]
+                        #仅当最新消息是大模型回复（ AIMessage ）才打印
                         if isinstance(latest_message, AIMessage):
                             if node_name == "understand":
                                 print(f"🧠 理解阶段: {latest_message.content}")

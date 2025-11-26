@@ -4,6 +4,7 @@ AutoGen 软件开发团队协作案例
 
 import os
 import asyncio
+import json
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
@@ -19,10 +20,20 @@ from autogen_agentchat.ui import Console
 
 def create_openai_model_client():
     """创建 OpenAI 模型客户端用于测试"""
+
+    # 增加modelinfo
+    model_info_env = os.getenv("LLM_MODEL_INFO")
+    model_info = None
+    if model_info_env:
+        try:
+            model_info = json.loads(model_info_env)
+        except Exception:
+            model_info = None
     return OpenAIChatCompletionClient(
         model=os.getenv("LLM_MODEL_ID", "gpt-4o"),
         api_key=os.getenv("LLM_API_KEY"),
-        base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+        base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1"),
+        model_info=model_info,
     )
 
 def create_product_manager(model_client):
@@ -44,6 +55,7 @@ def create_product_manager(model_client):
 
 请简洁明了地回应，并在分析完成后说"请工程师开始实现"。"""
 
+# 上层 Agent/Team 自动构建 messages （含系统与用户），客户端只是发送。
     return AssistantAgent(
         name="ProductManager",
         model_client=model_client,

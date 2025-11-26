@@ -2,4 +2,5 @@ LLM_MODEL_ID="gemini-2.0-flash-001"
 LLM_API_KEY="sk-6ujwCrxAwbxKh3EHht3XQW8HB7IDKIO47YOpGuffgMrcOf13"
 LLM_BASE_URL="https://x666.me/v1"
 LLM_TIMEOUT=60
+TAVILY_API_KEY="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"
 LLM_MODEL_INFO={"name":"gemini-2.0-flash-001","supports_streaming":true,"input_token_limit":32768,"output_token_limit":8192,"vision":true,"function_calling":true,"json_output":true,"family":"gemini"}
