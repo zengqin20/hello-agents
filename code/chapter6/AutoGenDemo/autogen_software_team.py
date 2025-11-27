@@ -79,7 +79,8 @@ def create_engineer(model_client):
 4. 添加必要的注释和说明
 5. 考虑边界情况和异常处理
 
-请提供完整的可运行代码，并在完成后说"请代码审查员检查"。"""
+请提供完整的可运行代码，并在完成后说"请代码审查员检查"。
+如果在实现过程中发现需求不明确、存在冲突或需要产品经理变更，请输出"ROLLBACK_TO_PM"并简要说明原因和建议变更点。"""
 
     return AssistantAgent(
         name="Engineer",
@@ -104,7 +105,8 @@ def create_code_reviewer(model_client):
 4. 提供具体的修改建议
 5. 评估代码的整体质量
 
-请提供具体的审查意见，完成后说"代码审查完成，请用户代理测试"。"""
+请提供具体的审查意见，完成后说"代码审查完成，请用户代理测试"。
+如果发现需要从需求层面调整，请输出"ROLLBACK_TO_PM"并说明理由与建议。"""
 
     return AssistantAgent(
         name="CodeReviewer",
@@ -129,8 +131,7 @@ async def run_software_development_team():
     """运行软件开发团队协作"""
     
     print("🔧 正在初始化模型客户端...")
-    
-    # 先使用标准的 OpenAI 客户端测试
+    # 先使用标准的OpenAI客户端测试
     model_client = create_openai_model_client()
     
     print("👥 正在创建智能体团队...")
@@ -141,22 +142,6 @@ async def run_software_development_team():
     code_reviewer = create_code_reviewer(model_client)
     user_proxy = create_user_proxy()
     
-    # 添加终止条件
-    termination = TextMentionTermination("TERMINATE")
-    
-    # 创建团队聊天
-    team_chat = RoundRobinGroupChat(
-        participants=[
-            product_manager,
-            engineer, 
-            code_reviewer,
-            user_proxy
-        ],
-        termination_condition=termination,
-        max_turns=20,  # 增加最大轮次
-    )
-    
-    # 定义开发任务
     task = """我们需要开发一个比特币价格显示应用，具体要求如下：
 
 核心功能：
@@ -172,16 +157,52 @@ async def run_software_development_team():
 请团队协作完成这个任务，从需求分析到最终实现。"""
     
     # 执行团队协作
-    print("🚀 启动 AutoGen 软件开发团队协作...")
+    print("🚀 启动动态协作工作流...")
     print("=" * 60)
     
-    # 使用 Console 来显示对话过程
-    result = await Console(team_chat.run_stream(task=task))
+    current_task = task
+    final_result = None
+
+    while True:
+        pm_chat = RoundRobinGroupChat(
+            participants=[product_manager],
+            termination_condition=TextMentionTermination("请工程师开始实现"),
+            max_turns=5,
+        )
+        pm_result = await Console(pm_chat.run_stream(task=current_task))
+
+        eng_chat = RoundRobinGroupChat(
+            participants=[engineer],
+            termination_condition=TextMentionTermination("请代码审查员检查"),
+            max_turns=10,
+        )
+        eng_result = await Console(eng_chat.run_stream(task=pm_result))
+        if isinstance(eng_result, str) and "ROLLBACK_TO_PM" in eng_result:
+            current_task = f"产品经理请根据工程师的回退请求重新评估并更新需求：\n{eng_result}"
+            continue
+
+        review_chat = RoundRobinGroupChat(
+            participants=[code_reviewer],
+            termination_condition=TextMentionTermination("代码审查完成，请用户代理测试"),
+            max_turns=5,
+        )
+        review_result = await Console(review_chat.run_stream(task=eng_result))
+        if isinstance(review_result, str) and "ROLLBACK_TO_PM" in review_result:
+            current_task = f"产品经理请根据代码审查意见重新评估并更新需求：\n{review_result}"
+            continue
+
+        user_chat = RoundRobinGroupChat(
+            participants=[user_proxy],
+            termination_condition=TextMentionTermination("TERMINATE"),
+            max_turns=5,
+        )
+        final_result = await Console(user_chat.run_stream(task=review_result))
+        break
     
     print("\n" + "=" * 60)
     print("✅ 团队协作完成！")
     
-    return result
+    return final_result
 
 # 主程序入口
 if __name__ == "__main__":
